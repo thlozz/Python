@@ -1,0 +1,64 @@
+import pandas as pd
+import os
+import re
+from PyPDF2 import PdfMerger
+
+def mesclar_arquivos(c_comp, c_notas, c_plan, c_saida):
+    os.makedirs(c_saida, exist_ok=True)
+    
+    try:
+        df = pd.read_excel(c_plan, dtype={'Valor': str})
+        df.columns = df.columns.str.strip().str.replace(' ', '_').str.lower()
+    except:
+        return
+
+    def norm_f(s):
+        limpo = re.sub(r'[^a-zA-Z0-9\s]', '', s.replace(' NOME FANTASIA', ''))
+        return re.sub(r'\s+', '_', limpo).upper().strip()
+
+    def norm_n(s):
+        return str(s).replace('.', '').strip()
+
+    def norm_v(s):
+        v = s.replace('R$', '').strip()
+        v = v.replace('.', '').replace(',', '.') if ',' in v and '.' in v else v.replace(',', '.') if ',' in v else v
+        try:
+            return f"{float(v):.2f}"
+        except:
+            return v
+
+    def mapear(diretorio, regex):
+        m = {}
+        for f in os.listdir(diretorio):
+            if f.endswith(".pdf"):
+                match = re.match(regex, os.path.splitext(f)[0])
+                if match:
+                    k = f"{norm_f(match.group(1))}_{norm_n(match.group(2))}_{norm_v(match.group(3))}"
+                    m[k] = os.path.join(diretorio, f)
+        return m
+
+    c_map = mapear(c_comp, r'(.+?)\s+([\d\.]+)\s+R\$\s*([\d\.,]+)')
+    n_map = mapear(c_notas, r'(.+?)\s+(?:NF\s*)?([\d\.]+)\s+R\$\s*([\d\.,]+)')
+
+    for _, row in df.iterrows():
+        try:
+            f_norm = norm_f(str(row['fornecedor']))
+            v_norm = norm_v(str(row['valor']))
+            
+            k_c = f"{f_norm}_{norm_n(row['numero_do_comprovante'])}_{v_norm}"
+            k_n = f"{f_norm}_{norm_n(row['numero_da_nota_fiscal'])}_{v_norm}"
+            
+            p_c, p_n = c_map.get(k_c), n_map.get(k_n)
+
+            if p_c and p_n:
+                out = os.path.join(c_saida, os.path.basename(p_n))
+                merger = PdfMerger()
+                merger.append(p_c)
+                merger.append(p_n)
+                merger.write(out)
+                merger.close()
+        except:
+            continue
+
+if __name__ == "__main__":
+    pass
