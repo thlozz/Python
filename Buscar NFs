@@ -1,0 +1,55 @@
+import os
+import re
+from PyPDF2 import PdfReader
+
+def extrair_previa(nome):
+    m = re.match(r'(.+?)\s*-\s*(\d+)\s*-\s*([\d,\.]+)\.pdf$', nome, re.I)
+    if not m: return None
+    try:
+        val = float(m.group(3).replace('.', '').replace(',', '.'))
+        return {'empresa': m.group(1).strip(), 'nf': m.group(2).strip(), 'valor': val, 'origem': nome}
+    except: return None
+
+def extrair_nota(txt):
+    d = {}
+    m_nf = re.search(r'(?:Nº da Nota|Número Nota|Nota Fiscal)\s*[:\s]*(\d+)', txt, re.I)
+    if m_nf: d['nf'] = m_nf.group(1).strip()
+    
+    m_val = re.search(r'(?:Valor Total|Total da Nota)\s*R\$\s*([\d\.,]+)', txt, re.I)
+    if m_val:
+        try: d['valor'] = float(m_val.group(1).replace('.', '').replace(',', '.'))
+        except: d['valor'] = None
+    return d
+
+def ler_pdf(path):
+    t = ""
+    try:
+        with open(path, 'rb') as f:
+            pdf = PdfReader(f)
+            for p in pdf.pages: t += p.extract_text() or ""
+    except: pass
+    return t
+
+def conciliar_notas(p_previa, p_completa):
+    previas = [extrair_previa(f) for f in os.listdir(p_previa) if f.endswith(".pdf")]
+    previas = [p for p in previas if p]
+
+    for f_comp in os.listdir(p_completa):
+        if not f_comp.endswith(".pdf"): continue
+        
+        caminho = os.path.join(p_completa, f_comp)
+        txt = ler_pdf(caminho)
+        dados_n = extrair_nota(txt)
+
+        if not dados_n.get('nf'): continue
+
+        for p in previas:
+            corresponde_nf = dados_n.get('nf') == p['nf']
+            corresponde_val = abs(dados_n.get('valor', 0) - p['valor']) < 0.01 if dados_n.get('valor') else False
+            corresponde_emp = re.search(re.escape(p['empresa']), txt, re.I) is not None
+            
+            if corresponde_nf and (corresponde_val or corresponde_emp):
+                print(f"CONCILIADO: {p['origem']} -> {f_comp}")
+
+if __name__ == "__main__":
+    pass
