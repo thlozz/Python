@@ -1,0 +1,38 @@
+import pandas as pd
+import os
+import shutil
+
+def organizar_documentos(planilha, origem, destino):
+    try:
+        df = pd.read_excel(planilha)
+    except:
+        return "Erro base"
+
+    for i, row in df.iterrows():
+        try:
+            forn = str(row["FORNECEDOR"]).strip()
+            nf = str(row["NF"]).strip()
+            val = str(row["VALOR"]).strip()
+            dia = str(row["DIA"]).strip()
+
+            nf_ref = nf[3:].strip() if nf.upper().startswith("NF ") else nf
+            
+            v_limpo = val.replace("R$ ", "")
+            v_float = float(v_limpo.replace(".", "").replace(",", ".")) if "," in v_limpo else float(v_limpo)
+            v_final = f"{v_float:.2f}".replace(".", ",")
+
+            arquivo = f"{forn} NF {nf_ref} R$ {v_final}.pdf"
+            path_origem = os.path.join(origem, arquivo)
+            path_destino = os.path.join(destino, dia)
+
+            if os.path.exists(path_origem):
+                if not os.path.exists(path_destino):
+                    os.makedirs(path_destino)
+                shutil.copy(path_origem, path_destino)
+        except:
+            continue
+            
+    return "Processado"
+
+if __name__ == "__main__":
+    pass
